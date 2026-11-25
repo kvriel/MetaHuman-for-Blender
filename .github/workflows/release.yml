@@ -1,0 +1,133 @@
+# Builds and publishes a GitHub release. It only runs from a release branch:
+#
+#   1. Set `version` in addon/mfb/blender_manifest.toml (for example 1.1.0).
+#   2. Write the release notes in .github/release-notes/<version>.md.
+#   3. Push a branch named release/<version> (for example release/1.1.0).
+#
+# The workflow builds the extension zip, the Windows installer and the macOS installer, tags the
+# commit v<version>, and creates the release with the three files. Pushing more commits to the
+# same release branch before the tag exists rebuilds it. Once v<version> is tagged on another
+# commit, the run stops: bump the version for a new release.
+name: Release
+
+on:
+  push:
+    branches: ["release/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  BLENDER_VERSION: "5.3.0"
+
+jobs:
+  release:
+    if: startsWith(github.ref, 'refs/heads/release/')
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read the version
+        id: version
+        run: |
+          $line = Select-String -Path addon/mfb/blender_manifest.toml -Pattern '^version\s*=\s*"([^"]+)"'
+          $version = $line.Matches[0].Groups[1].Value
+          $branch = "${{ github.ref_name }}"
+          if ($branch -ne "release/$version") {
+            throw "Branch $branch does not match the manifest version $version. Name the branch release/$version."
+          }
+          $notes = ".github/release-notes/$version.md"
+          if (-not (Test-Path $notes)) { throw "Missing release notes: $notes" }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+          "notes=$notes" >> $env:GITHUB_OUTPUT
+
+      - name: Check the tag
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          $lines = @(git ls-remote --tags origin "refs/tags/$tag*" | Where-Object { $_ -match "refs/tags/$([regex]::Escape($tag))(\^\{\})?$" })
+          if ($lines) {
+            # An annotated tag has a second, peeled line (^{}) with the commit it points at.
+            $line = ($lines | Where-Object { $_ -like '*^{}' } | Select-Object -First 1)
+            if (-not $line) { $line = $lines[0] }
+            $sha = ($line -split "\s+")[0]
+            if ($sha -ne "${{ github.sha }}") {
+              throw "$tag already exists on commit $sha. Bump the version in blender_manifest.toml for a new release."
+            }
+            "Tag $tag already points at this commit; the release will be updated."
+          }
+
+      - name: Cache Blender
+        id: blender-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/blender
+          key: blender-${{ env.BLENDER_VERSION }}-windows-x64
+
+      - name: Download Blender
+        if: steps.blender-cache.outputs.cache-hit != 'true'
+        run: |
+          $v = "${{ env.BLENDER_VERSION }}"
+          $series = ($v -split '\.')[0..1] -join '.'
+          $zip = "${{ runner.temp }}\blender.zip"
+          Invoke-WebRequest "https://download.blender.org/release/Blender$series/blender-$v-windows-x64.zip" -OutFile $zip
+          Expand-Archive $zip -DestinationPath "${{ runner.temp }}\blender"
+          Remove-Item $zip
+
+      - name: Find Blender and Inno Setup
+        run: |
+          $blender = (Get-ChildItem "${{ runner.temp }}\blender" -Recurse -Filter blender.exe | Select-Object -First 1).FullName
+          if (-not $blender) { throw "blender.exe not found" }
+          "BLENDER=$blender" >> $env:GITHUB_ENV
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          if (-not (Test-Path $iscc)) { throw "Inno Setup not found" }
+          "ISCC=$iscc" >> $env:GITHUB_ENV
+
+      - name: Build the extension and installers
+        run: ./installer/build_installers.ps1
+
+      - name: Tag the release
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          if (-not (git ls-remote --tags origin "refs/tags/$tag")) {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a $tag -m "MetaHuman for Blender ${{ steps.version.outputs.version }}"
+            git push origin $tag
+            if ($LASTEXITCODE) { throw "Could not push $tag" }
+          }
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = "${{ steps.version.outputs.version }}"
+          $tag = "${{ steps.version.outputs.tag }}"
+          $title = "MetaHuman for Blender $v"
+          $files = @("dist/MetaHuman-for-Blender-$v.zip",
+                     "dist/MetaHuman-for-Blender-$v-Setup.exe",
+                     "dist/MetaHuman-for-Blender-$v-macOS.zip")
+          foreach ($f in $files) { if (-not (Test-Path $f)) { throw "Missing $f" } }
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release edit $tag --title $title --notes-file "${{ steps.version.outputs.notes }}" --latest
+            if ($LASTEXITCODE) { throw "gh release edit failed" }
+            gh release upload $tag @files --clobber
+            if ($LASTEXITCODE) { throw "gh release upload failed" }
+          } else {
+            gh release create $tag @files --title $title --notes-file "${{ steps.version.outputs.notes }}" --verify-tag --latest
+            if ($LASTEXITCODE) { throw "gh release create failed" }
+          }

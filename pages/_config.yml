@@ -1,0 +1,29 @@
+# GitHub Pages site: https://kvriel.github.io/MetaHumanForBlender/
+# Built by .github/workflows/pages.yml from this folder plus the guide in docs/ (its *.md pages and
+# images), copied in at build time. index.html is the landing page; every guide page is rendered
+# with _layouts/default.html.
+title: MetaHuman for Blender
+description: >-
+  A free Blender add-on that brings MetaHumans into Blender with a live face and body rig:
+  animate the face, sculpt expressions, fix body poses, style hair and export back to Unreal Engine 5.
+url: https://kvriel.github.io
+baseurl: /MetaHumanForBlender
+lang: en
+image: /images/social.jpg
+twitter:
+  card: summary_large_image
+
+markdown: kramdown
+kramdown:
+  input: GFM
+
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
+  - jekyll-relative-links
+  - jekyll-optional-front-matter
+  - jekyll-titles-from-headings
+  - jekyll-default-layout
+
+relative_links:
+  enabled: true

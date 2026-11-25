@@ -1,0 +1,56 @@
+# Builds the website (https://kvriel.github.io/MetaHumanForBlender/) and publishes it to GitHub Pages.
+#
+# The site is pages/ (landing page, layout, stylesheet, social image) plus the how-to guide in docs/
+# (its Markdown pages and images), put together at build time so the guide has one home and the
+# README's docs/ links keep working. Jekyll renders each guide page with pages/_layouts/default.html.
+#
+# Repository setting: Settings > Pages > Build and deployment > Source: GitHub Actions.
+name: Pages
+
+# Every push to main rebuilds the site: a path filter can skip force-pushes of an amended commit.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Put the site together
+        run: |
+          mkdir -p site
+          cp -r pages/. site/
+          cp docs/*.md site/
+          cp -r docs/images site/
+
+      - uses: actions/configure-pages@v5
+
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./site
+          destination: ./_site
+
+      - uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
