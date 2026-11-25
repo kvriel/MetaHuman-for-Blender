@@ -1,0 +1,29 @@
+MetaHuman for Blender - macOS installer
+
+Install
+1. Quit Blender.
+2. Double-click "Install MetaHuman for Blender.command".
+3. A Terminal window lists the Blender versions on this Mac (4.2 or newer is needed).
+   Press Return to install into all of them, or type the numbers of the ones you want.
+4. Open Blender, press N in the 3D Viewport and choose the MetaHuman tab, or use the
+   MetaHuman menu in the top bar.
+
+Uninstall
+Double-click "Uninstall MetaHuman for Blender.command" and pick the Blender versions.
+
+If macOS won't open the installer
+The installer is not signed by Apple, so macOS may say it "cannot be opened" or is from an
+unidentified developer.
+- macOS 14 and earlier: Control-click the file, choose Open, then click Open again.
+- macOS 15 and later: try to open it once, then go to System Settings > Privacy & Security,
+  scroll down and click Open Anyway.
+- Or open Terminal, type "bash " (with a space), drag the .command file into the window and
+  press Return.
+
+Without the installer
+In Blender: Edit > Preferences > Get Extensions, open the menu at the top right, choose
+Install from Disk and pick the mfb-<version>.zip in this folder. You can also drag that zip
+into the Blender window.
+
+How to use the tools:
+https://github.com/kvriel/MetaHumanForBlender/blob/main/docs/HOW_TO_USE.md

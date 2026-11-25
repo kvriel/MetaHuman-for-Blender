@@ -1,0 +1,15 @@
+﻿# Epic's reference files, unpacked for study only. Never commit or redistribute.
+_reference/
+
+# Python / build output
+__pycache__/
+*.pyc
+/build/
+/dist/
+*.zip
+
+# Test output
+/tests/out/
+
+# Internal notes. Not published.
+_internal/
